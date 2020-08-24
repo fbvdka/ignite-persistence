@@ -2,7 +2,8 @@ package test.db
 
 import javax.cache.Cache
 import com.typesafe.config.ConfigFactory
-import org.apache.ignite.binary.BinaryObject
+import org.apache.ignite.{IgniteBinary, Ignition}
+import org.apache.ignite.binary.{BinaryObject, BinaryObjectBuilder}
 import org.apache.ignite.cache.store.CacheStoreAdapter
 import org.apache.ignite.lang.IgniteBiInClosure
 import org.slf4j.LoggerFactory
@@ -15,7 +16,7 @@ import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
 import scala.util.{Failure, Success, Try}
 
-trait PostgresSlickConnection {
+trait BinaryPostgresSlickConnection {
 
   val pgProfile = PostgresProfile.api
 
@@ -24,7 +25,7 @@ trait PostgresSlickConnection {
   val tableName: String
 }
 
-class CachePostgresSlickStore extends CacheStoreAdapter[String, Device] with PostgresSlickConnection with Serializable {
+class CacheBinaryPostgresSlickStore extends CacheStoreAdapter[String, BinaryObject] with BinaryPostgresSlickConnection with Serializable {
 
   import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -32,7 +33,7 @@ class CachePostgresSlickStore extends CacheStoreAdapter[String, Device] with Pos
 
   val log = LoggerFactory.getLogger("IgniteLog")
 
-  val tableName = "device_ignite_slick_table"
+  val tableName = "device_ignite_slick_table_binary"
 
   import pgProfile._
 
@@ -75,12 +76,12 @@ class CachePostgresSlickStore extends CacheStoreAdapter[String, Device] with Pos
     }
   }
 
-  override def loadCache(clo: IgniteBiInClosure[String, Device], args: AnyRef*): Unit = {
+  override def loadCache(clo: IgniteBiInClosure[String, BinaryObject], args: AnyRef*): Unit = {
     for {
       devices <- pgDatabase.run(table.map(u => u).result) recoverWith { case _ => Future(Seq.empty[Device]) }
     } yield {
       log.info(s"Loading cache $tableName")
-      devices.foreach(device => clo.apply(device.id, device))
+      devices.foreach(device => clo.apply(device.id, Ignition.ignite().binary().toBinary(device)))
     }
   }
 
@@ -92,15 +93,17 @@ class CachePostgresSlickStore extends CacheStoreAdapter[String, Device] with Pos
     pgDatabase.run(dbioAction)
   }
 
-  override def write(entry: Cache.Entry[_ <: String, _ <: Device]): Unit = Try {
-    log.info(s"Insert into $tableName value ${entry.getValue.toString}")
-    val dbioAction = DBIO.seq(table.insertOrUpdate(entry.getValue)).transactionally
+  override def write(entry: Cache.Entry[_ <: String, _ <: BinaryObject]): Unit = Try {
+    val device: Device = entry.getValue.deserialize()
+    log.info(s"Insert into $tableName value ${device.toString}")
+    val dbioAction = DBIO.seq(table.insertOrUpdate(device)).transactionally
     pgDatabase.run(dbioAction)
   }
 
-  override def load(key: String): Device = {
+  override def load(key: String): BinaryObject = {
     val loadedDevice = pgDatabase.run(table.filter(_.id === key).result.headOption)
-    Await.result(loadedDevice, 10 second).getOrElse(null)
+    val device = Await.result(loadedDevice, 10 second).getOrElse(null)
+    Ignition.ignite().binary().toBinary(device)
   }
 
 

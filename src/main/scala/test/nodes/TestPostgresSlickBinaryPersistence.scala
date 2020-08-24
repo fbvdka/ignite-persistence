@@ -5,12 +5,13 @@ import org.apache.ignite.cache.CacheMode
 import org.apache.ignite.configuration.{CacheConfiguration, IgniteConfiguration}
 import org.apache.ignite.lang.IgniteFuture
 import org.slf4j.LoggerFactory
-import test.db.CachePostgresSlickStore
+import test.db.{CacheBinaryPostgresSlickStore}
 
 import scala.concurrent.Promise
 import scala.util.{Failure, Random, Success, Try}
+import test.db
 
-object TestPostgresSlickPersistence extends App {
+object TestPostgresSlickBinaryPersistence extends App {
 
   val logger = LoggerFactory.getLogger("IgniteLog")
 
@@ -23,11 +24,12 @@ object TestPostgresSlickPersistence extends App {
 
   import javax.cache.configuration.FactoryBuilder
 
-  cacheCfg.setCacheStoreFactory(FactoryBuilder.factoryOf(classOf[CachePostgresSlickStore]))
+  cacheCfg.setCacheStoreFactory(FactoryBuilder.factoryOf(classOf[CacheBinaryPostgresSlickStore]))
   cacheCfg.setBackups(1)
   cacheCfg.setCacheMode(CacheMode.REPLICATED)
   cacheCfg.setReadThrough(true)
   cacheCfg.setWriteThrough(true)
+  cacheCfg.setStoreKeepBinary(true)
 
   config.setCacheConfiguration(cacheCfg)
 
