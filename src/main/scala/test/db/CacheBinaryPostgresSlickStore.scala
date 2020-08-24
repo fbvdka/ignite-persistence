@@ -25,7 +25,7 @@ trait BinaryPostgresSlickConnection {
   val tableName: String
 }
 
-class CacheBinaryPostgresSlickStore extends CacheStoreAdapter[String, BinaryObject] with BinaryPostgresSlickConnection with Serializable {
+class CacheBinaryPostgresSlickStore extends CacheStoreAdapter[String, Any] with BinaryPostgresSlickConnection with Serializable {
 
   import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -76,7 +76,7 @@ class CacheBinaryPostgresSlickStore extends CacheStoreAdapter[String, BinaryObje
     }
   }
 
-  override def loadCache(clo: IgniteBiInClosure[String, BinaryObject], args: AnyRef*): Unit = {
+  override def loadCache(clo: IgniteBiInClosure[String, Any], args: AnyRef*): Unit = {
     for {
       devices <- pgDatabase.run(table.map(u => u).result) recoverWith { case _ => Future(Seq.empty[Device]) }
     } yield {
@@ -93,14 +93,14 @@ class CacheBinaryPostgresSlickStore extends CacheStoreAdapter[String, BinaryObje
     pgDatabase.run(dbioAction)
   }
 
-  override def write(entry: Cache.Entry[_ <: String, _ <: BinaryObject]): Unit = Try {
-    val device: Device = entry.getValue.deserialize()
+  override def write(entry: Cache.Entry[_ <: String, _ <: Any]): Unit = Try {
+    val device: Device = entry.getValue.asInstanceOf[BinaryObject].deserialize()
     log.info(s"Insert into $tableName value ${device.toString}")
     val dbioAction = DBIO.seq(table.insertOrUpdate(device)).transactionally
     pgDatabase.run(dbioAction)
   }
 
-  override def load(key: String): BinaryObject = {
+  override def load(key: String): Any = {
     val loadedDevice = pgDatabase.run(table.filter(_.id === key).result.headOption)
     val device = Await.result(loadedDevice, 10 second).getOrElse(null)
     Ignition.ignite().binary().toBinary(device)
