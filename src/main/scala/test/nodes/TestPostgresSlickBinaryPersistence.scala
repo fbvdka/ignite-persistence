@@ -19,7 +19,7 @@ object TestPostgresSlickBinaryPersistence extends App {
 
   val config = new IgniteConfiguration()
 
-  val JdbcPersistence = "device_ignite_table_slick"
+  val JdbcPersistence = "device_ignite_table_slick_binary"
   val cacheCfg = new CacheConfiguration[String, Device](JdbcPersistence)
 
   import javax.cache.configuration.FactoryBuilder
